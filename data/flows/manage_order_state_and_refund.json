@@ -1,0 +1,63 @@
+{
+  "name": "manage_order_state_and_refund",
+  "confidence": "medium",
+  "surface": "admin",
+  "summary": "Use Admin API order actions for back-office lifecycle changes, including order and transaction state transitions.",
+  "triggers": [
+    "refund",
+    "order state",
+    "update its state",
+    "transaction state",
+    "delivery state",
+    "fulfillment lifecycle",
+    "valid transition"
+  ],
+  "steps": [
+    {
+      "surface": "admin",
+      "method": "GET",
+      "route": "/order",
+      "purpose": "Locate the target order."
+    },
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/_action/order/{orderId}/state/{transition}",
+      "purpose": "Transition the order state when the order lifecycle changes."
+    },
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/_action/order_transaction/{orderTransactionId}/state/{transition}",
+      "purpose": "Transition the transaction state for payment-related lifecycle changes."
+    },
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/_action/order_delivery/{orderDeliveryId}/state/{transition}",
+      "purpose": "Transition the delivery state for shipment and fulfillment lifecycle changes."
+    },
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/_action/order_transaction_capture_refund/{refundId}",
+      "purpose": "Trigger a refund for captured transaction amounts when supported.",
+      "optional": true
+    }
+  ],
+  "prerequisites": [
+    "Transitions must be valid for the current state machine state.",
+    "Refund handling depends on payment integration support and captured transactions.",
+    "Order, delivery, and transaction entities each have separate state machines."
+  ],
+  "commonFailureReasons": [
+    "The wrong entity was transitioned: order instead of delivery, or transaction instead of order.",
+    "The requested transition is invalid for the current state machine state.",
+    "Refund actions are attempted before capture or without payment-handler support."
+  ],
+  "diagnosticChecks": [
+    "Inspect the current order, delivery, and transaction state separately before choosing a transition route.",
+    "Treat payment and fulfillment as different state-machine problems.",
+    "When a transition fails, verify whether the problem is invalid state, wrong entity, or unsupported refund flow."
+  ]
+}

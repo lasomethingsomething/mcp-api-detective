@@ -1,0 +1,94 @@
+{
+  "name": "investigate_search_criteria_for_product_and_category",
+  "confidence": "medium",
+  "surface": "admin",
+  "summary": "Use Admin API search endpoints plus entity-schema inspection to validate product/category Criteria queries and reduce guessing around term, filter, and field names.",
+  "triggers": [
+    "search criteria",
+    "criteria",
+    "manufacturer lookups",
+    "product and category",
+    "search product manufacturer",
+    "term vs filter",
+    "sortable fields",
+    "sorting products"
+  ],
+  "steps": [
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/search/product-manufacturer",
+      "purpose": "Discover manufacturers first so product-by-manufacturer examples have a valid manufacturer ID to use.",
+      "notes": [
+        "The entity name product-manufacturer is not obvious to new users.",
+        "Typical includes payloads should expose id and name for follow-up queries."
+      ]
+    },
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/search/product",
+      "purpose": "List or filter products with Criteria queries.",
+      "notes": [
+        "Use filter for exact field constraints like manufacturerId.",
+        "Use term for full-text style matching when you want search semantics rather than exact field filters.",
+        "Use sort clauses to validate which product fields are actually useful for stable ordered results."
+      ]
+    },
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/search/category",
+      "purpose": "List or search categories with Criteria queries.",
+      "notes": [
+        "Categories often need both term and filter examples because term vs contains is easy to confuse.",
+        "Seed data assumptions matter: empty results may reflect missing fixture data rather than invalid criteria."
+      ]
+    },
+    {
+      "surface": "admin",
+      "method": "GET",
+      "route": "/_info/entity-schema.json",
+      "purpose": "Inspect entity schema metadata to discover field names before building Criteria filters and sorts.",
+      "notes": [
+        "Field discoverability is still incomplete for searchable vs filterable vs sortable capabilities."
+      ]
+    }
+  ],
+  "prerequisites": [
+    "Admin API calls use a Bearer token, and short-lived tokens can interrupt exploratory work.",
+    "Product and category examples are only meaningful when the local instance has usable seed data."
+  ],
+  "commonFailureReasons": [
+    "Empty results caused by sparse local seed data rather than invalid queries.",
+    "Unclear field names such as manufacturerId vs manufacturer.name when building filters.",
+    "Confusion about when to use term versus explicit filter operators like equals or contains."
+  ],
+  "recommendedExamples": [
+    {
+      "job": "products by manufacturer",
+      "route": "/search/product",
+      "pattern": "filter on manufacturerId with a small includes block"
+    },
+    {
+      "job": "products by text/name",
+      "route": "/search/product",
+      "pattern": "term-based query with limit and minimal includes"
+    },
+    {
+      "job": "categories by text/name",
+      "route": "/search/category",
+      "pattern": "compare term against contains filter on name"
+    },
+    {
+      "job": "products sorted by name or created date",
+      "route": "/search/product",
+      "pattern": "add sort clauses after verifying the field names in entity schema"
+    }
+  ],
+  "diagnosticChecks": [
+    "Run the same query without filters to separate data absence from bad filter design.",
+    "Compare term-based queries with explicit contains or equals filters on the same field.",
+    "Use entity schema and route examples together before assuming a field is searchable, filterable, or sortable."
+  ]
+}

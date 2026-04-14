@@ -1,0 +1,96 @@
+{
+  "name": "create_product_and_complete_checkout",
+  "confidence": "high",
+  "surface": "admin + store",
+  "summary": "Create catalog data with the Admin API, then use the Store API cart and order flow with a logged-in customer.",
+  "triggers": [
+    "checkout",
+    "add it to cart",
+    "complete checkout",
+    "place an order",
+    "product and checkout",
+    "variant product",
+    "product with media",
+    "stock availability"
+  ],
+  "steps": [
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/category",
+      "purpose": "Create the category that will hold the product."
+    },
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/product",
+      "purpose": "Create the product with category assignment and sales-channel visibility.",
+      "notes": [
+        "Include categories in the product payload instead of relying on a later patch step.",
+        "Include visibilities so the product is discoverable through the Store API.",
+        "Variants, media, and stock-sensitive products may require extra setup before checkout behaves like a real storefront flow."
+      ]
+    },
+    {
+      "surface": "admin",
+      "method": "PATCH",
+      "route": "/product/{id}",
+      "purpose": "Update the product when variant structure, media assignment, or stock-related fields need follow-up changes.",
+      "optional": true
+    },
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/search",
+      "purpose": "Confirm the product is available in the sales channel before cart operations.",
+      "notes": [
+        "Use this step to catch visibility, stock, and sales-channel mismatches before the cart step."
+      ]
+    },
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/checkout/cart/line-item",
+      "purpose": "Add the product to the cart."
+    },
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/account/register or /account/login",
+      "purpose": "Authenticate the shopper before creating the order.",
+      "notes": [
+        "The context token can change after registration or login.",
+        "If the context token changes, re-add the line item before creating the order."
+      ]
+    },
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/checkout/order",
+      "purpose": "Create the order from the active cart."
+    },
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/handle-payment",
+      "purpose": "Continue the payment flow when the selected payment handler requires it.",
+      "optional": true
+    }
+  ],
+  "prerequisites": [
+    "Admin API calls use a Bearer token.",
+    "Store API calls use sw-access-key.",
+    "Checkout ordering typically requires a logged-in customer."
+  ],
+  "commonFailureReasons": [
+    "Product missing sales-channel visibility.",
+    "Customer not authenticated before /checkout/order.",
+    "Cart created under an old context token after login or registration.",
+    "Variant, media, or stock assumptions were incomplete for the storefront scenario being tested."
+  ],
+  "diagnosticChecks": [
+    "Compare Admin API product state with Store API search visibility before debugging checkout.",
+    "If login changes the context token, confirm whether the cart must be rebuilt.",
+    "When testing variants or stock-sensitive products, verify the storefront-facing product state before adding to cart."
+  ]
+}

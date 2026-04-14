@@ -1,0 +1,91 @@
+{
+  "name": "customer_registration_to_order_history",
+  "confidence": "high",
+  "surface": "store",
+  "summary": "Register or log in a customer, verify account context, place an order, and then inspect order history and post-purchase account data.",
+  "triggers": [
+    "customer registration",
+    "order history",
+    "register customer",
+    "login customer",
+    "customer account",
+    "guest checkout",
+    "convert guest"
+  ],
+  "steps": [
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/account/register",
+      "purpose": "Register a customer when starting from an anonymous storefront context.",
+      "notes": [
+        "Registration may create a new Store API context token.",
+        "For guest flows, keep track of whether the account is guest or fully registered."
+      ]
+    },
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/account/login",
+      "purpose": "Authenticate an existing customer before account and order-history operations.",
+      "notes": [
+        "Logging in can replace the previous context token.",
+        "If cart state matters, verify whether the cart must be rebuilt after login."
+      ]
+    },
+    {
+      "surface": "store",
+      "method": "GET",
+      "route": "/account/customer",
+      "purpose": "Fetch the active customer context and confirm the storefront session is authenticated."
+    },
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/checkout/order",
+      "purpose": "Create an order after the customer context and cart are ready."
+    },
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/handle-payment",
+      "purpose": "Continue the payment flow for handlers that require a follow-up payment step.",
+      "optional": true
+    },
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/order",
+      "purpose": "List the authenticated customer's orders after checkout succeeds."
+    },
+    {
+      "surface": "store",
+      "method": "GET",
+      "route": "/order/download/{orderId}/{downloadId}",
+      "purpose": "Inspect order-related downloads when supported by the order content.",
+      "optional": true
+    },
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/account/convert-guest",
+      "purpose": "Convert a guest customer into a registered customer when the flow starts as guest checkout.",
+      "optional": true
+    }
+  ],
+  "prerequisites": [
+    "Store API calls use sw-access-key.",
+    "Order creation still depends on a valid cart and customer context.",
+    "Guest and registered customer flows have different post-purchase expectations."
+  ],
+  "commonFailureReasons": [
+    "Context token changes after register or login and the cart is no longer in the expected state.",
+    "Customer appears authenticated locally but the Store API session is still anonymous.",
+    "Order history is empty because the order was created under a different customer context."
+  ],
+  "diagnosticChecks": [
+    "Check /account/customer immediately after register or login.",
+    "Confirm whether the cart still contains items after auth-related context changes.",
+    "Separate guest checkout expectations from registered-customer order history expectations."
+  ]
+}

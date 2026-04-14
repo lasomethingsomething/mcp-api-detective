@@ -1,0 +1,86 @@
+{
+  "name": "catalog_setup_for_real_discoverability",
+  "confidence": "high",
+  "surface": "admin + store",
+  "summary": "Create the catalog entities needed for a product to exist and then verify the product is truly visible through Store API search in the intended sales channel.",
+  "triggers": [
+    "discoverability",
+    "discoverable",
+    "visible",
+    "catalog setup",
+    "sales channel",
+    "not showing up",
+    "store search mismatch"
+  ],
+  "steps": [
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/product-manufacturer",
+      "purpose": "Create or identify the manufacturer used by the product."
+    },
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/category",
+      "purpose": "Create or identify the category that should expose the product in the catalog."
+    },
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/product",
+      "purpose": "Create the product with the minimum catalog fields needed for discoverability.",
+      "notes": [
+        "Use categories to attach the product to navigation structure.",
+        "Include visibilities for the target sales channel so Store API search can see the product.",
+        "Make active, price, and stock assumptions explicit when diagnosing missing products.",
+        "If you later enrich the product with media or variant data, re-check discoverability after each meaningful catalog change."
+      ]
+    },
+    {
+      "surface": "admin",
+      "method": "PATCH",
+      "route": "/product/{id}",
+      "purpose": "Apply follow-up catalog adjustments such as category changes, media assignment, or visibility corrections.",
+      "optional": true
+    },
+    {
+      "surface": "admin",
+      "method": "POST",
+      "route": "/search/product",
+      "purpose": "Verify the product exists in the Admin API and inspect key fields like active, productNumber, and manufacturerId."
+    },
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/search",
+      "purpose": "Verify the product is actually discoverable in the target sales channel.",
+      "notes": [
+        "A product can exist in Admin API and still be invisible in Store API if visibility or sales-channel assumptions are wrong."
+      ]
+    },
+    {
+      "surface": "store",
+      "method": "POST",
+      "route": "/product",
+      "purpose": "Confirm direct Store API product reads or listings behave as expected after search succeeds.",
+      "optional": true
+    }
+  ],
+  "prerequisites": [
+    "Admin API calls use a Bearer token and Store API checks use sw-access-key.",
+    "You need a target sales channel in mind when setting product visibility.",
+    "Seed data and sales-channel setup can affect whether a product is discoverable after creation."
+  ],
+  "commonFailureReasons": [
+    "Product exists in Admin API but is missing sales-channel visibility.",
+    "Category assignment exists but the product is inactive or lacks other storefront prerequisites.",
+    "Store API search is executed against a different sales-channel context than the one used for product visibility."
+  ],
+  "diagnosticChecks": [
+    "Check that the product is returned by /search/product before debugging Store API visibility.",
+    "Inspect visibilities, category assignment, and manufacturer/category IDs used during creation.",
+    "Verify the same sales channel is used consistently across visibility setup and Store API verification.",
+    "Compare Admin API success with Store API absence to catch catalog wiring mistakes rather than creation failures."
+  ]
+}
