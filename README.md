@@ -41,29 +41,29 @@ It can answer both low-level and high-level questions:
 
 ### Source code
 
-- [main.go](/Users/l.apple/shopware-dev-mcp/main.go)
+- [main.go](main.go)
   The MCP server implementation and tool behavior
-- [main_test.go](/Users/l.apple/shopware-dev-mcp/main_test.go)
+- [main_test.go](main_test.go)
   Regression tests for route ranking, flow selection, and real OpenAPI-backed behavior
 
 ### Bundled contract data
 
-- [data/admin-openapi.json](/Users/l.apple/shopware-dev-mcp/data/admin-openapi.json)
-- [data/store-openapi.json](/Users/l.apple/shopware-dev-mcp/data/store-openapi.json)
-- [data/admin-routes.json](/Users/l.apple/shopware-dev-mcp/data/admin-routes.json)
-- [data/store-routes.json](/Users/l.apple/shopware-dev-mcp/data/store-routes.json)
-- [data/entity-schema.json](/Users/l.apple/shopware-dev-mcp/data/entity-schema.json)
+- [data/admin-openapi.json](data/admin-openapi.json)
+- [data/store-openapi.json](data/store-openapi.json)
+- [data/admin-routes.json](data/admin-routes.json)
+- [data/store-routes.json](data/store-routes.json)
+- [data/entity-schema.json](data/entity-schema.json)
 
 These files let the server work even without live Shopware credentials, and they are also used in tests.
 
 ### Curated developer flows
 
-- [data/flows/README.md](/Users/l.apple/shopware-dev-mcp/data/flows/README.md)
-- [data/flows/create_product_and_complete_checkout.json](/Users/l.apple/shopware-dev-mcp/data/flows/create_product_and_complete_checkout.json)
-- [data/flows/catalog_setup_for_real_discoverability.json](/Users/l.apple/shopware-dev-mcp/data/flows/catalog_setup_for_real_discoverability.json)
-- [data/flows/investigate_search_criteria_for_product_and_category.json](/Users/l.apple/shopware-dev-mcp/data/flows/investigate_search_criteria_for_product_and_category.json)
-- [data/flows/customer_registration_to_order_history.json](/Users/l.apple/shopware-dev-mcp/data/flows/customer_registration_to_order_history.json)
-- [data/flows/manage_order_state_and_refund.json](/Users/l.apple/shopware-dev-mcp/data/flows/manage_order_state_and_refund.json)
+- [data/flows/README.md](data/flows/README.md)
+- [data/flows/create_product_and_complete_checkout.json](data/flows/create_product_and_complete_checkout.json)
+- [data/flows/catalog_setup_for_real_discoverability.json](data/flows/catalog_setup_for_real_discoverability.json)
+- [data/flows/investigate_search_criteria_for_product_and_category.json](data/flows/investigate_search_criteria_for_product_and_category.json)
+- [data/flows/customer_registration_to_order_history.json](data/flows/customer_registration_to_order_history.json)
+- [data/flows/manage_order_state_and_refund.json](data/flows/manage_order_state_and_refund.json)
 
 These flow files are human-readable artifacts you can inspect directly, and they are also loaded by the `explain_flow` MCP tool at runtime.
 They also power flow scoring, checklist generation, request-pack generation, and workflow-level assessment output.
@@ -311,7 +311,7 @@ Call the flow-oriented tools with natural-language use cases:
 
 ### Directly from the repo
 
-Open the JSON files in [data/flows](/Users/l.apple/shopware-dev-mcp/data/flows) and follow the described steps manually.
+Open the JSON files in [data/flows](data/flows) and follow the described steps manually.
 
 This is useful when you want to:
 

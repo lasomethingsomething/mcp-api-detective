@@ -68,10 +68,10 @@ Open any file in this folder and follow the steps directly.
 
 Good starting files:
 
-- [create_product_and_complete_checkout.json](/Users/l.apple/shopware-dev-mcp/data/flows/create_product_and_complete_checkout.json)
-- [catalog_setup_for_real_discoverability.json](/Users/l.apple/shopware-dev-mcp/data/flows/catalog_setup_for_real_discoverability.json)
-- [investigate_search_criteria_for_product_and_category.json](/Users/l.apple/shopware-dev-mcp/data/flows/investigate_search_criteria_for_product_and_category.json)
-- [manage_order_state_and_refund.json](/Users/l.apple/shopware-dev-mcp/data/flows/manage_order_state_and_refund.json)
+- [create_product_and_complete_checkout.json](create_product_and_complete_checkout.json)
+- [catalog_setup_for_real_discoverability.json](catalog_setup_for_real_discoverability.json)
+- [investigate_search_criteria_for_product_and_category.json](investigate_search_criteria_for_product_and_category.json)
+- [manage_order_state_and_refund.json](manage_order_state_and_refund.json)
 
 ### 2. Use it through the MCP server
 
