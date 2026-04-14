@@ -10,6 +10,92 @@ It is built to help developers who get stuck on questions like:
 - Why does this flow fail even though one step worked?
 - How do I chain these calls together without guessing?
 
+## Quick Start
+
+This server runs over MCP stdio.
+
+The fastest way to try it locally is:
+
+```bash
+go run .
+```
+
+That starts the MCP server on stdio for an MCP client to connect to. It does not start an HTTP server.
+
+### Requirements
+
+- Go 1.26+
+- launch the server from the repository root, or set absolute file paths in the environment
+
+### Offline mode with bundled files
+
+The server includes bundled Shopware contract data in `data/`, but you must point the server at those files explicitly.
+
+Example:
+
+```bash
+export SHOPWARE_ADMIN_OPENAPI_FILE="$PWD/data/admin-openapi.json"
+export SHOPWARE_STORE_OPENAPI_FILE="$PWD/data/store-openapi.json"
+export SHOPWARE_ENTITY_SCHEMA_FILE="$PWD/data/entity-schema.json"
+export SHOPWARE_ADMIN_ROUTES_FILE="$PWD/data/admin-routes.json"
+export SHOPWARE_STORE_ROUTES_FILE="$PWD/data/store-routes.json"
+
+go run .
+```
+
+This is the easiest setup for exploring the server without live Shopware credentials.
+
+### Live mode against a Shopware instance
+
+If you want live Shopware data, set:
+
+```bash
+export SHOPWARE_BASE_URL="https://your-shopware.example"
+export SHOPWARE_ADMIN_TOKEN="..."
+export SHOPWARE_STORE_ACCESS_KEY="..."
+export SHOPWARE_PREFER_LIVE_DATA="true"
+
+go run .
+```
+
+You can also combine live access with file fallbacks by setting both the live credentials and the file-path variables.
+
+### MCP client example
+
+Your MCP client needs to start the server from this repository and pass the environment variables above.
+
+Example shape:
+
+```json
+{
+  "mcpServers": {
+    "shopware-dev": {
+      "command": "go",
+      "args": ["run", "."],
+      "cwd": "/absolute/path/to/shopware-dev-mcp",
+      "env": {
+        "SHOPWARE_ADMIN_OPENAPI_FILE": "/absolute/path/to/shopware-dev-mcp/data/admin-openapi.json",
+        "SHOPWARE_STORE_OPENAPI_FILE": "/absolute/path/to/shopware-dev-mcp/data/store-openapi.json",
+        "SHOPWARE_ENTITY_SCHEMA_FILE": "/absolute/path/to/shopware-dev-mcp/data/entity-schema.json",
+        "SHOPWARE_ADMIN_ROUTES_FILE": "/absolute/path/to/shopware-dev-mcp/data/admin-routes.json",
+        "SHOPWARE_STORE_ROUTES_FILE": "/absolute/path/to/shopware-dev-mcp/data/store-routes.json"
+      }
+    }
+  }
+}
+```
+
+If you build the binary first, you can replace `command` and `args` with the compiled executable path.
+
+### First prompts to try
+
+Once the server is connected in your MCP client, start with:
+
+- `explain_flow` for `create a product and complete checkout`
+- `explain_flow` for `investigate search criteria for product and category`
+- `find_routes` with `create product`
+- `describe_route` for a route returned by `find_routes`
+
 ## What This Server Does
 
 This server combines three things:
@@ -55,6 +141,7 @@ It can answer both low-level and high-level questions:
 - [data/entity-schema.json](data/entity-schema.json)
 
 These files let the server work even without live Shopware credentials, and they are also used in tests.
+To use them at runtime, set the matching `SHOPWARE_*_FILE` environment variables.
 
 ### Curated developer flows
 
@@ -163,23 +250,48 @@ So the server is not generating workflows from scratch every time. It is selecti
 
 - uses `sw-access-key`
 
-The server can work from bundled fallback files, or from live Shopware if credentials are configured.
+The server can work from file-based fallback data, or from live Shopware if credentials are configured.
 
 ## Environment Variables
 
-You can point the server at a live Shopware instance with:
+The server reads configuration from environment variables.
+
+### Live Shopware settings
 
 - `SHOPWARE_BASE_URL`
 - `SHOPWARE_ADMIN_TOKEN`
 - `SHOPWARE_STORE_ACCESS_KEY`
 - `SHOPWARE_PREFER_LIVE_DATA`
+
+`SHOPWARE_PREFER_LIVE_DATA=true` tells the server to try the live Shopware instance before any configured file fallback.
+
+### File fallback settings
+
 - `SHOPWARE_ADMIN_OPENAPI_FILE`
 - `SHOPWARE_STORE_OPENAPI_FILE`
 - `SHOPWARE_ENTITY_SCHEMA_FILE`
 - `SHOPWARE_ADMIN_ROUTES_FILE`
 - `SHOPWARE_STORE_ROUTES_FILE`
 
-If live access is not available, the bundled files under `data/` can still be used.
+Use absolute paths when possible. If you use relative paths, they are resolved from the process working directory.
+
+For offline mode, set:
+
+```bash
+export SHOPWARE_ADMIN_OPENAPI_FILE="$PWD/data/admin-openapi.json"
+export SHOPWARE_STORE_OPENAPI_FILE="$PWD/data/store-openapi.json"
+export SHOPWARE_ENTITY_SCHEMA_FILE="$PWD/data/entity-schema.json"
+export SHOPWARE_ADMIN_ROUTES_FILE="$PWD/data/admin-routes.json"
+export SHOPWARE_STORE_ROUTES_FILE="$PWD/data/store-routes.json"
+```
+
+### Important path note
+
+Curated workflow files are loaded from `data/flows/` at runtime.
+That means your MCP client should either:
+
+- launch the server with `cwd` set to the repository root
+- or use a wrapper script/binary setup that preserves the repository-root working directory
 
 ## How To Use
 
