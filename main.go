@@ -24,15 +24,15 @@ const (
 type NoInput struct{}
 
 type Config struct {
-	BaseURL            string
-	AdminToken         string
-	StoreAccessKey     string
-	PreferLiveData     bool
-	AdminOpenAPIFile   string
-	StoreOpenAPIFile   string
-	EntitySchemaFile   string
-	AdminRoutesFile    string
-	StoreRoutesFile    string
+	BaseURL          string
+	AdminToken       string
+	StoreAccessKey   string
+	PreferLiveData   bool
+	AdminOpenAPIFile string
+	StoreOpenAPIFile string
+	EntitySchemaFile string
+	AdminRoutesFile  string
+	StoreRoutesFile  string
 }
 
 type ShopwareClient struct {
@@ -104,9 +104,9 @@ type AssessWorkflowSupportInput struct {
 }
 
 type GenerateFlowChecklistInput struct {
-	UseCase   string `json:"useCase"`
-	Language  string `json:"language,omitempty"`
-	BaseURL   string `json:"baseUrl,omitempty"`
+	UseCase  string `json:"useCase"`
+	Language string `json:"language,omitempty"`
+	BaseURL  string `json:"baseUrl,omitempty"`
 }
 
 type GenerateFlowRequestPackInput struct {
@@ -153,16 +153,41 @@ type openAPIFinding struct {
 }
 
 func loadConfig() Config {
+	adminOpenAPIFile := strings.TrimSpace(os.Getenv("SHOPWARE_ADMIN_OPENAPI_FILE"))
+	if adminOpenAPIFile == "" {
+		adminOpenAPIFile = "data/admin-openapi.json"
+	}
+
+	storeOpenAPIFile := strings.TrimSpace(os.Getenv("SHOPWARE_STORE_OPENAPI_FILE"))
+	if storeOpenAPIFile == "" {
+		storeOpenAPIFile = "data/store-openapi.json"
+	}
+
+	entitySchemaFile := strings.TrimSpace(os.Getenv("SHOPWARE_ENTITY_SCHEMA_FILE"))
+	if entitySchemaFile == "" {
+		entitySchemaFile = "data/entity-schema.json"
+	}
+
+	adminRoutesFile := strings.TrimSpace(os.Getenv("SHOPWARE_ADMIN_ROUTES_FILE"))
+	if adminRoutesFile == "" {
+		adminRoutesFile = "data/admin-routes.json"
+	}
+
+	storeRoutesFile := strings.TrimSpace(os.Getenv("SHOPWARE_STORE_ROUTES_FILE"))
+	if storeRoutesFile == "" {
+		storeRoutesFile = "data/store-routes.json"
+	}
+
 	return Config{
 		BaseURL:          strings.TrimRight(os.Getenv("SHOPWARE_BASE_URL"), "/"),
 		AdminToken:       os.Getenv("SHOPWARE_ADMIN_TOKEN"),
 		StoreAccessKey:   os.Getenv("SHOPWARE_STORE_ACCESS_KEY"),
 		PreferLiveData:   strings.EqualFold(os.Getenv("SHOPWARE_PREFER_LIVE_DATA"), "true"),
-		AdminOpenAPIFile: os.Getenv("SHOPWARE_ADMIN_OPENAPI_FILE"),
-		StoreOpenAPIFile: os.Getenv("SHOPWARE_STORE_OPENAPI_FILE"),
-		EntitySchemaFile: os.Getenv("SHOPWARE_ENTITY_SCHEMA_FILE"),
-		AdminRoutesFile:  os.Getenv("SHOPWARE_ADMIN_ROUTES_FILE"),
-		StoreRoutesFile:  os.Getenv("SHOPWARE_STORE_ROUTES_FILE"),
+		AdminOpenAPIFile: adminOpenAPIFile,
+		StoreOpenAPIFile: storeOpenAPIFile,
+		EntitySchemaFile: entitySchemaFile,
+		AdminRoutesFile:  adminRoutesFile,
+		StoreRoutesFile:  storeRoutesFile,
 	}
 }
 
@@ -312,7 +337,24 @@ func normalizeRouteValue(v string) string {
 }
 
 func queryTokens(query string) []string {
-	return strings.Fields(strings.ToLower(strings.TrimSpace(query)))
+	raw := strings.Fields(strings.ToLower(strings.TrimSpace(query)))
+	stop := map[string]bool{
+		"a": true, "an": true, "the": true, "and": true, "or": true,
+		"for": true, "with": true, "without": true, "in": true, "on": true,
+		"criteria": true, "criterion": true, "behavior": true, "workflows": true,
+		"workflow": true, "investigate": true, "investigation": true,
+		"debug": true, "issue": true, "problem": true,
+	}
+
+	tokens := make([]string, 0, len(raw))
+	for _, token := range raw {
+		token = strings.Trim(token, " ,.:;!?()[]{}\"'")
+		if token == "" || stop[token] {
+			continue
+		}
+		tokens = append(tokens, token)
+	}
+	return tokens
 }
 
 func tokenizeRouteText(parts ...string) map[string]bool {
@@ -381,6 +423,8 @@ func entityCandidates(tokens []string) []string {
 		"search": true, "find": true, "lookup": true,
 		"aggregate": true, "stats": true,
 		"list": true, "get": true, "read": true, "show": true, "fetch": true,
+		"criteria": true, "criterion": true, "behavior": true,
+		"investigate": true, "investigation": true,
 	}
 	var entities []string
 	var filtered []string
@@ -613,6 +657,29 @@ func findMatches(openapi OpenAPI, query string, apiType string) []map[string]any
 	return matches
 }
 
+func canonicalCriteriaIntent(intent string) string {
+	intent = strings.ToLower(strings.TrimSpace(intent))
+	switch intent {
+	case "", "search_by_id", "find_by_exact_field", "search_text", "list_recent", "detail_with_associations":
+		return intent
+	}
+
+	switch {
+	case strings.Contains(intent, "exact"), strings.Contains(intent, "equals"), strings.Contains(intent, "field"):
+		return "find_by_exact_field"
+	case strings.Contains(intent, "detail"), strings.Contains(intent, "association"), strings.Contains(intent, "with_association"):
+		return "detail_with_associations"
+	case strings.Contains(intent, "recent"), strings.Contains(intent, "latest"), strings.Contains(intent, "newest"), strings.Contains(intent, "last"):
+		return "list_recent"
+	case strings.Contains(intent, "id"), strings.Contains(intent, "uuid"):
+		return "search_by_id"
+	case strings.Contains(intent, "search"), strings.Contains(intent, "term"), strings.Contains(intent, "text"), strings.Contains(intent, "keyword"):
+		return "search_text"
+	default:
+		return ""
+	}
+}
+
 func describeRoute(openapi OpenAPI, needle string) []map[string]any {
 	needle = strings.TrimSpace(needle)
 	if needle == "" {
@@ -703,7 +770,7 @@ func buildCriteriaPayload(input CriteriaInput) map[string]any {
 		"limit": limit,
 	}
 
-	switch input.Intent {
+	switch canonicalCriteriaIntent(input.Intent) {
 	case "search_by_id":
 		payload["ids"] = []string{"<uuid>"}
 	case "find_by_exact_field":
@@ -741,6 +808,10 @@ func buildCriteriaPayload(input CriteriaInput) map[string]any {
 }
 
 func requestExample(baseURL string, input RequestExampleInput) string {
+	return requestExampleForSurface(baseURL, input, "")
+}
+
+func requestExampleForSurface(baseURL string, input RequestExampleInput, surface string) string {
 	method := strings.ToUpper(strings.TrimSpace(input.Method))
 	if method == "" {
 		method = http.MethodGet
@@ -765,7 +836,11 @@ func requestExample(baseURL string, input RequestExampleInput) string {
 		baseURL = "http://localhost"
 	}
 
-	isStore := strings.HasPrefix(input.Route, "/store-api/")
+	route := routeWithSurfacePrefix(surface, input.Route)
+	isStore := strings.HasPrefix(route, "/store-api/")
+	if route == "" {
+		route = input.Route
+	}
 
 	if lang == "js" {
 		authHeader := "\"Authorization\": \"Bearer \" + process.env.SHOPWARE_ADMIN_TOKEN"
@@ -773,7 +848,7 @@ func requestExample(baseURL string, input RequestExampleInput) string {
 			authHeader = "\"sw-access-key\": process.env.SHOPWARE_STORE_ACCESS_KEY"
 		}
 
-		return fmt.Sprintf("const response = await fetch(\"%s%s\", {\n  method: \"%s\",\n  headers: {\n    \"Accept\": \"application/json\",\n    %s,\n    \"Content-Type\": \"application/json\"\n  },\n  body: JSON.stringify(%s)\n});\n\nconst data = await response.json();\nconsole.log(data);", baseURL, input.Route, method, authHeader, body)
+		return fmt.Sprintf("const response = await fetch(\"%s%s\", {\n  method: \"%s\",\n  headers: {\n    \"Accept\": \"application/json\",\n    %s,\n    \"Content-Type\": \"application/json\"\n  },\n  body: JSON.stringify(%s)\n});\n\nconst data = await response.json();\nconsole.log(data);", baseURL, route, method, authHeader, body)
 	}
 
 	authHeader := "  -H \"Authorization: Bearer $SHOPWARE_ADMIN_TOKEN\" \\\n"
@@ -781,7 +856,7 @@ func requestExample(baseURL string, input RequestExampleInput) string {
 		authHeader = "  -H \"sw-access-key: $SHOPWARE_STORE_ACCESS_KEY\" \\\n"
 	}
 
-	return fmt.Sprintf("curl -X %s \"%s%s\" \\\n  -H \"Accept: application/json\" \\\n%s  -H \"Content-Type: application/json\" \\\n  -d '%s'", method, baseURL, input.Route, authHeader, body)
+	return fmt.Sprintf("curl -X %s \"%s%s\" \\\n  -H \"Accept: application/json\" \\\n%s  -H \"Content-Type: application/json\" \\\n  -d '%s'", method, baseURL, route, authHeader, body)
 }
 
 func routeWithSurfacePrefix(surface string, route string) string {
@@ -852,15 +927,15 @@ func starterPayloadForRoute(route string) map[string]any {
 	case "/search":
 		return map[string]any{
 			"search": "<term>",
-			"limit": 3,
+			"limit":  3,
 		}
 	case "/checkout/cart/line-item":
 		return map[string]any{
 			"items": []map[string]any{{
-				"type":       "product",
-				"id":         "<line-item-id>",
+				"type":         "product",
+				"id":           "<line-item-id>",
 				"referencedId": "<product-id>",
-				"quantity":   1,
+				"quantity":     1,
 			}},
 		}
 	case "/checkout/order":
@@ -869,10 +944,10 @@ func starterPayloadForRoute(route string) map[string]any {
 		}
 	case "/account/register":
 		return map[string]any{
-			"email":      "dev@example.com",
-			"password":   "<password>",
-			"firstName":  "<first-name>",
-			"lastName":   "<last-name>",
+			"email":        "dev@example.com",
+			"password":     "<password>",
+			"firstName":    "<first-name>",
+			"lastName":     "<last-name>",
 			"salutationId": "<salutation-id>",
 		}
 	case "/account/login":
@@ -992,12 +1067,12 @@ func generateFlowChecklist(useCase string, language string, baseURL string, admi
 		}
 
 		if !strings.Contains(step.Route, " or ") {
-			stepOut["requestExample"] = requestExample(baseURL, RequestExampleInput{
+			stepOut["requestExample"] = requestExampleForSurface(baseURL, RequestExampleInput{
 				Route:    routeWithSurfacePrefix(step.Surface, step.Route),
 				Method:   step.Method,
 				Language: language,
 				Payload:  starterPayloadForRoute(step.Route),
-			})
+			}, step.Surface)
 		}
 
 		steps = append(steps, stepOut)
@@ -1101,12 +1176,12 @@ func generateFlowRequestPack(useCase string, language string, baseURL string, ad
 				"method":   strings.ToUpper(step.Method),
 				"language": language,
 				"payload":  starterPayloadForRoute(step.Route),
-				"example": requestExample(baseURL, RequestExampleInput{
+				"example": requestExampleForSurface(baseURL, RequestExampleInput{
 					Route:    routeWithSurfacePrefix(step.Surface, step.Route),
 					Method:   step.Method,
 					Language: language,
 					Payload:  starterPayloadForRoute(step.Route),
-				}),
+				}, step.Surface),
 			}
 		}
 
@@ -1147,11 +1222,11 @@ func exportAssessmentReport(useCase string, format string, language string, base
 	requestPackReport := generateFlowRequestPack(useCase, language, baseURL, admin, store)
 
 	report := map[string]any{
-		"useCase":          useCase,
-		"openapiAnalysis":  openapiReport,
-		"workflowSupport":  workflowReport,
-		"flowChecklist":    checklistReport,
-		"flowRequestPack":  requestPackReport,
+		"useCase":         useCase,
+		"openapiAnalysis": openapiReport,
+		"workflowSupport": workflowReport,
+		"flowChecklist":   checklistReport,
+		"flowRequestPack": requestPackReport,
 	}
 
 	if strings.EqualFold(format, "markdown") {
@@ -1235,6 +1310,8 @@ func explainSurface(useCase string) string {
 	text := strings.ToLower(useCase)
 
 	switch {
+	case strings.Contains(text, "search criteria"), strings.Contains(text, "discoverab"), strings.Contains(text, "search behavior"):
+		return "Best fit: both Admin API and Store API. Use Admin API to inspect entity search criteria and schema-backed search inputs, then compare with Store API listing or search behavior if shopper-facing discoverability is part of the problem."
 	case strings.Contains(text, "checkout"), strings.Contains(text, "cart"), strings.Contains(text, "storefront"), strings.Contains(text, "customer-facing"):
 		return "Best fit: Store API. Pair it with a storefront or plugin extension if you also need in-platform rendering or behavior changes."
 	case strings.Contains(text, "admin ui"), strings.Contains(text, "administration ui"), strings.Contains(text, "merchant backend"):
@@ -1260,6 +1337,39 @@ func explainAuth(apiType string, route string) string {
 func containsPath(openapi OpenAPI, needle string) bool {
 	_, ok := openapi.Paths[needle]
 	return ok
+}
+
+func routeExists(openapi OpenAPI, route string) bool {
+	normalizedNeedle := normalizeRouteValue(route)
+	for path := range openapi.Paths {
+		if normalizeRouteValue(path) == normalizedNeedle {
+			return true
+		}
+	}
+	return false
+}
+
+func detectRouteSurface(route string, admin OpenAPI, store OpenAPI) string {
+	normalizedRoute := normalizeRouteValue(route)
+	switch {
+	case strings.HasPrefix(normalizedRoute, "/store-api/"), strings.HasPrefix(route, "/store-api/"):
+		return "store"
+	case strings.HasPrefix(normalizedRoute, "/api/"), strings.HasPrefix(route, "/api/"):
+		return "admin"
+	}
+
+	adminMatch := routeExists(admin, route)
+	storeMatch := routeExists(store, route)
+	switch {
+	case storeMatch && !adminMatch:
+		return "store"
+	case adminMatch && !storeMatch:
+		return "admin"
+	case strings.HasPrefix(normalizedRoute, "/checkout/"), strings.HasPrefix(normalizedRoute, "/account/"), normalizedRoute == "/search", normalizedRoute == "/search-suggest":
+		return "store"
+	default:
+		return ""
+	}
 }
 
 func routeOptions(route string) []string {
@@ -1517,15 +1627,15 @@ func analyzeSingleOpenAPI(openapi OpenAPI, apiType string) map[string]any {
 	summary["score"] = score
 	summary["rating"] = scoreLabel(score)
 	summary["scoreBreakdown"] = map[string]any{
-		"baseScore":                      100,
-		"missingOperationIdsPenalty":     deductionOperationIDs,
-		"missingSummariesPenalty":        deductionSummaries,
-		"missingDescriptionsPenalty":     deductionDescriptions,
-		"missingTagsPenalty":             deductionTags,
-		"missingResponsesPenalty":        deductionResponses,
-		"duplicateOperationIdsPenalty":   deductionDuplicateOperationIDs,
-		"workflowRisksPenalty":           deductionWorkflowRisks,
-		"finalScore":                     score,
+		"baseScore":                    100,
+		"missingOperationIdsPenalty":   deductionOperationIDs,
+		"missingSummariesPenalty":      deductionSummaries,
+		"missingDescriptionsPenalty":   deductionDescriptions,
+		"missingTagsPenalty":           deductionTags,
+		"missingResponsesPenalty":      deductionResponses,
+		"duplicateOperationIdsPenalty": deductionDuplicateOperationIDs,
+		"workflowRisksPenalty":         deductionWorkflowRisks,
+		"finalScore":                   score,
 	}
 
 	findingMaps := make([]map[string]any, 0, len(findings))
@@ -1548,10 +1658,10 @@ func analyzeSingleOpenAPI(openapi OpenAPI, apiType string) map[string]any {
 	}
 
 	return map[string]any{
-		"summary":              summary,
-		"findings":             findingMaps,
-		"workflowRisks":        workflowRiskMaps,
-		"workflowRiskCount":    len(workflowRiskMaps),
+		"summary":                summary,
+		"findings":               findingMaps,
+		"workflowRisks":          workflowRiskMaps,
+		"workflowRiskCount":      len(workflowRiskMaps),
 		"structuralFindingCount": len(findingMaps),
 	}
 }
@@ -1862,17 +1972,17 @@ func analyzeEntitySearchCapabilities(entity string, admin OpenAPI, entitySchema 
 	}
 
 	checks := map[string]any{
-		"searchRoutePresent":                searchDetails != nil,
-		"aggregateRoutePresent":             containsPath(admin, aggregateRoute),
-		"crudCollectionRoutePresent":        containsPath(admin, crudRoute),
-		"requestBodyDocumented":             requestBodyDocumented,
-		"entitySchemaPresent":               schemaEntry != nil,
-		"entitySchemaError":                 schemaError,
-		"explicitSearchableFieldsMetadata":  explicitSearchable,
-		"explicitFilterableFieldsMetadata":  explicitFilterable,
-		"explicitSortableFieldsMetadata":    explicitSortable,
-		"termVsFilterGuidanceInContract":    termVsFilterGuidance,
-		"searchRouteDescriptionQuality":     descriptionQuality,
+		"searchRoutePresent":               searchDetails != nil,
+		"aggregateRoutePresent":            containsPath(admin, aggregateRoute),
+		"crudCollectionRoutePresent":       containsPath(admin, crudRoute),
+		"requestBodyDocumented":            requestBodyDocumented,
+		"entitySchemaPresent":              schemaEntry != nil,
+		"entitySchemaError":                schemaError,
+		"explicitSearchableFieldsMetadata": explicitSearchable,
+		"explicitFilterableFieldsMetadata": explicitFilterable,
+		"explicitSortableFieldsMetadata":   explicitSortable,
+		"termVsFilterGuidanceInContract":   termVsFilterGuidance,
+		"searchRouteDescriptionQuality":    descriptionQuality,
 	}
 
 	result := map[string]any{
@@ -1950,10 +2060,10 @@ func assessSingleFlow(flow curatedFlow, admin OpenAPI, store OpenAPI) map[string
 		details := findRouteDetails(openapi, step.Route, step.Method)
 		if details == nil {
 			item := map[string]any{
-				"surface": step.Surface,
-				"method":  step.Method,
-				"route":   step.Route,
-				"purpose": step.Purpose,
+				"surface":  step.Surface,
+				"method":   step.Method,
+				"route":    step.Route,
+				"purpose":  step.Purpose,
 				"optional": step.Optional,
 			}
 			missingRoutes = append(missingRoutes, item)
@@ -1985,11 +2095,11 @@ func assessSingleFlow(flow curatedFlow, admin OpenAPI, store OpenAPI) map[string
 		description := strings.TrimSpace(fmt.Sprint(details["description"]))
 		if summary == "" || description == "" {
 			weaklyDocumentedRoutes = append(weaklyDocumentedRoutes, map[string]any{
-				"route":   step.Route,
-				"method":  step.Method,
-				"summary": summary,
+				"route":       step.Route,
+				"method":      step.Method,
+				"summary":     summary,
 				"description": description,
-				"reason":  "Route is present but summary or description is weak/missing.",
+				"reason":      "Route is present but summary or description is weak/missing.",
 			})
 			score -= 4
 		}
@@ -2037,20 +2147,20 @@ func assessSingleFlow(flow curatedFlow, admin OpenAPI, store OpenAPI) map[string
 	}
 
 	return map[string]any{
-		"name":                   flow.Name,
-		"surface":                flow.Surface,
-		"summary":                flow.Summary,
-		"score":                  score,
-		"rating":                 scoreLabel(score),
-		"requiredStepCount":      requiredStepCount,
-		"requiredRoutesCovered":  foundRequiredStepCount,
-		"coveragePercent":        coveragePercent,
-		"authClarity":            authClarity,
-		"requiredRoutesFound":    requiredRoutesFound,
-		"missingRoutes":          missingRoutes,
-		"weaklyDocumentedRoutes": weaklyDocumentedRoutes,
+		"name":                     flow.Name,
+		"surface":                  flow.Surface,
+		"summary":                  flow.Summary,
+		"score":                    score,
+		"rating":                   scoreLabel(score),
+		"requiredStepCount":        requiredStepCount,
+		"requiredRoutesCovered":    foundRequiredStepCount,
+		"coveragePercent":          coveragePercent,
+		"authClarity":              authClarity,
+		"requiredRoutesFound":      requiredRoutesFound,
+		"missingRoutes":            missingRoutes,
+		"weaklyDocumentedRoutes":   weaklyDocumentedRoutes,
 		"hiddenPrerequisiteRoutes": hiddenPrerequisiteRoutes,
-		"contractGaps":           contractGaps,
+		"contractGaps":             contractGaps,
 	}
 }
 
@@ -2419,7 +2529,12 @@ func main() {
 		Name:        "generate_api_request_example",
 		Description: "Generate a Shopware API request example in curl or js",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input RequestExampleInput) (*mcp.CallToolResult, any, error) {
-		return toolResult(requestExample(cfg.BaseURL, input)), nil, nil
+		var admin OpenAPI
+		var store OpenAPI
+		_, _ = client.fetchOrLoadJSON(ctx, "/api/_info/openapi3.json", "admin", cfg.AdminOpenAPIFile, &admin)
+		_, _ = client.fetchOrLoadJSON(ctx, "/store-api/_info/openapi3.json", "store", cfg.StoreOpenAPIFile, &store)
+		surface := detectRouteSurface(input.Route, admin, store)
+		return toolResult(requestExampleForSurface(cfg.BaseURL, input, surface)), nil, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{

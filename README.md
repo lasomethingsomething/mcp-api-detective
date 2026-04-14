@@ -29,21 +29,16 @@ That starts the MCP server on stdio for an MCP client to connect to. It does not
 
 ### Offline mode with bundled files
 
-The server includes bundled Shopware contract data in `data/`, but you must point the server at those files explicitly.
+The server includes bundled Shopware contract data in `data/` and will use those files by default when they are available from the repository root.
 
 Example:
 
 ```bash
-export SHOPWARE_ADMIN_OPENAPI_FILE="$PWD/data/admin-openapi.json"
-export SHOPWARE_STORE_OPENAPI_FILE="$PWD/data/store-openapi.json"
-export SHOPWARE_ENTITY_SCHEMA_FILE="$PWD/data/entity-schema.json"
-export SHOPWARE_ADMIN_ROUTES_FILE="$PWD/data/admin-routes.json"
-export SHOPWARE_STORE_ROUTES_FILE="$PWD/data/store-routes.json"
-
 go run .
 ```
 
 This is the easiest setup for exploring the server without live Shopware credentials.
+If you launch the server outside the repository root, set absolute `SHOPWARE_*_FILE` paths explicitly.
 
 ### Live mode against a Shopware instance
 
@@ -72,19 +67,13 @@ Example shape:
     "shopware-dev": {
       "command": "go",
       "args": ["run", "."],
-      "cwd": "/absolute/path/to/shopware-dev-mcp",
-      "env": {
-        "SHOPWARE_ADMIN_OPENAPI_FILE": "/absolute/path/to/shopware-dev-mcp/data/admin-openapi.json",
-        "SHOPWARE_STORE_OPENAPI_FILE": "/absolute/path/to/shopware-dev-mcp/data/store-openapi.json",
-        "SHOPWARE_ENTITY_SCHEMA_FILE": "/absolute/path/to/shopware-dev-mcp/data/entity-schema.json",
-        "SHOPWARE_ADMIN_ROUTES_FILE": "/absolute/path/to/shopware-dev-mcp/data/admin-routes.json",
-        "SHOPWARE_STORE_ROUTES_FILE": "/absolute/path/to/shopware-dev-mcp/data/store-routes.json"
-      }
+      "cwd": "/absolute/path/to/shopware-dev-mcp"
     }
   }
 }
 ```
 
+If you launch from another working directory, add the file-path env vars explicitly.
 If you build the binary first, you can replace `command` and `args` with the compiled executable path.
 
 ### First prompts to try
@@ -141,7 +130,7 @@ It can answer both low-level and high-level questions:
 - [data/entity-schema.json](data/entity-schema.json)
 
 These files let the server work even without live Shopware credentials, and they are also used in tests.
-To use them at runtime, set the matching `SHOPWARE_*_FILE` environment variables.
+They are also the default runtime fallback when the server is launched from the repository root.
 
 ### Curated developer flows
 
@@ -275,7 +264,12 @@ The server reads configuration from environment variables.
 
 Use absolute paths when possible. If you use relative paths, they are resolved from the process working directory.
 
-For offline mode, set:
+You only need to set these explicitly when:
+
+- you want to override the bundled files
+- you launch the server outside the repository root
+
+Example:
 
 ```bash
 export SHOPWARE_ADMIN_OPENAPI_FILE="$PWD/data/admin-openapi.json"

@@ -58,6 +58,35 @@ func TestLoadCuratedFlows(t *testing.T) {
 	}
 }
 
+func TestLoadConfigDefaultsToBundledFiles(t *testing.T) {
+	t.Setenv("SHOPWARE_BASE_URL", "")
+	t.Setenv("SHOPWARE_ADMIN_TOKEN", "")
+	t.Setenv("SHOPWARE_STORE_ACCESS_KEY", "")
+	t.Setenv("SHOPWARE_PREFER_LIVE_DATA", "")
+	t.Setenv("SHOPWARE_ADMIN_OPENAPI_FILE", "")
+	t.Setenv("SHOPWARE_STORE_OPENAPI_FILE", "")
+	t.Setenv("SHOPWARE_ENTITY_SCHEMA_FILE", "")
+	t.Setenv("SHOPWARE_ADMIN_ROUTES_FILE", "")
+	t.Setenv("SHOPWARE_STORE_ROUTES_FILE", "")
+
+	cfg := loadConfig()
+	if got := cfg.AdminOpenAPIFile; got != "data/admin-openapi.json" {
+		t.Fatalf("expected default admin openapi file, got %q", got)
+	}
+	if got := cfg.StoreOpenAPIFile; got != "data/store-openapi.json" {
+		t.Fatalf("expected default store openapi file, got %q", got)
+	}
+	if got := cfg.EntitySchemaFile; got != "data/entity-schema.json" {
+		t.Fatalf("expected default entity schema file, got %q", got)
+	}
+	if got := cfg.AdminRoutesFile; got != "data/admin-routes.json" {
+		t.Fatalf("expected default admin routes file, got %q", got)
+	}
+	if got := cfg.StoreRoutesFile; got != "data/store-routes.json" {
+		t.Fatalf("expected default store routes file, got %q", got)
+	}
+}
+
 func TestAnalyzeSingleOpenAPIFindings(t *testing.T) {
 	openapi := OpenAPI{
 		Paths: map[string]map[string]OpenAPIOperation{
@@ -273,6 +302,49 @@ func TestGenerateFlowChecklistAgainstRealOpenAPI(t *testing.T) {
 	}
 	if _, ok := registerStep["requestExample"]; !ok {
 		t.Fatalf("expected requestExample for register step, got %v", registerStep)
+	}
+}
+
+func TestBuildCriteriaPayloadAcceptsNaturalLanguageIntent(t *testing.T) {
+	payload := buildCriteriaPayload(CriteriaInput{
+		Entity:       "product",
+		Intent:       "search product by term and manufacturer",
+		Associations: []string{"manufacturer"},
+		Limit:        5,
+	})
+	if got := payload["term"]; got != "<search-term>" {
+		t.Fatalf("expected search_text payload, got %v", payload)
+	}
+	if _, ok := payload["note"]; ok {
+		t.Fatalf("did not expect unknown-intent note, got %v", payload)
+	}
+}
+
+func TestRequestExamplePrefixesStoreRoutesAndUsesStoreAuth(t *testing.T) {
+	store := loadOpenAPIForTest(t, "data/store-openapi.json")
+	admin := loadOpenAPIForTest(t, "data/admin-openapi.json")
+	surface := detectRouteSurface("/search", admin, store)
+	if got := surface; got != "store" {
+		t.Fatalf("expected store surface, got %q", got)
+	}
+
+	out := requestExampleForSurface("http://localhost:8000", RequestExampleInput{
+		Route:    "/search",
+		Method:   "POST",
+		Language: "curl",
+		Payload: map[string]any{
+			"search": "shoe",
+		},
+	}, surface)
+
+	if !strings.Contains(out, "http://localhost:8000/store-api/search") {
+		t.Fatalf("expected store-api prefixed URL, got %s", out)
+	}
+	if !strings.Contains(out, "sw-access-key: $SHOPWARE_STORE_ACCESS_KEY") {
+		t.Fatalf("expected store auth header, got %s", out)
+	}
+	if strings.Contains(out, "Authorization: Bearer $SHOPWARE_ADMIN_TOKEN") {
+		t.Fatalf("did not expect admin auth header, got %s", out)
 	}
 }
 
@@ -728,6 +800,25 @@ func TestFindMatchesAgainstRealStoreOpenAPI(t *testing.T) {
 	}
 	if got := matches[0]["confidence"]; got == nil || got == "" {
 		t.Fatalf("expected confidence, got %v", got)
+	}
+}
+
+func TestFindMatchesHandlesSearchCriteriaPhrasing(t *testing.T) {
+	admin := loadOpenAPIForTest(t, "data/admin-openapi.json")
+	matches := findMatches(admin, "investigate search criteria for product and category", "admin")
+	if len(matches) == 0 {
+		t.Fatal("expected matches")
+	}
+
+	paths := map[string]bool{}
+	for _, match := range matches {
+		paths[fmt.Sprint(match["path"])] = true
+	}
+	if !paths["/search/product"] {
+		t.Fatalf("expected /search/product in matches, got %v", matches)
+	}
+	if !paths["/search/category"] {
+		t.Fatalf("expected /search/category in matches, got %v", matches)
 	}
 }
 
